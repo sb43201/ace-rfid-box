@@ -1,25 +1,30 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_PN532.h>
-#include <Preferences.h>
+#include <EEPROM.h>
 
-// ===================== WEMOS MINI ESP32 PIN SETTINGS =====================
-#define I2C_SDA       21
-#define I2C_SCL       22
+// ===================== WEMOS D1 MINI ESP8266 PIN SETTINGS =====================
+// Use the Arduino D-pin labels for ESP8266 Wemos/Lolin D1 mini boards.
+// Avoid holding D3, D4, or D8 buttons while powering the board because they are boot strap pins.
+#define I2C_SDA       D2
+#define I2C_SCL       D1
 
-#define PN532_IRQ     4
-#define PN532_RESET   16
+#define PN532_IRQ     D5
+#define PN532_RESET   D0
 
-#define ENC_CLK       32
-#define ENC_DT        33
-#define ENC_SW        25
+#define ENC_CLK       D6
+#define ENC_DT        D7
+#define ENC_SW        D3
 
-#define READ_BUTTON   26
-#define WRITE_BUTTON  13
+#define READ_BUTTON   D4
+#define WRITE_BUTTON  3
 
-#define BUZZER_PIN    14
-#define LED_PIN       27
+#define BUZZER_PIN    D8
+#define LED_PIN       LED_BUILTIN
 #define BUZZER_IS_ACTIVE true
+#define BUILTIN_LED_ON  LOW
+#define BUILTIN_LED_OFF HIGH
+#define EEPROM_SIZE     4096
 
 #ifndef LED_BUILTIN
 #define LED_BUILTIN   2
@@ -28,7 +33,6 @@
 // ===================== OBJECTS =====================
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET, &Wire);
-Preferences prefs;
 
 // ===================== TAG DATA =====================
 struct TagData {
@@ -46,6 +50,21 @@ struct TagData {
 };
 
 TagData currentTag;
+
+// ===================== EEPROM SAVE SLOTS =====================
+struct SavedTagSlot {
+  uint8_t valid;
+  uint8_t pages[32][4];
+  char name[17];
+  char material[17];
+  char colorName[17];
+  int16_t nozzleMin;
+  int16_t nozzleMax;
+  int16_t bedMin;
+  int16_t bedMax;
+  int16_t diameter;
+  int16_t lengthMeter;
+};
 
 // ===================== PRESET DATA =====================
 struct FilamentPreset {
@@ -149,6 +168,7 @@ int menuIndex = 0;
 int selectedPreset = 0;
 int selectedMaterial = 0;
 const int saveSlotCount = 20;
+const int saveSlotSize = sizeof(SavedTagSlot);
 int selectedSaveSlot = 0;
 bool tagWaitCanceled = false;
 
@@ -179,7 +199,9 @@ void cloneCurrentToTag();
 void saveCurrentTag();
 void loadSavedTag();
 int selectSaveSlot(const char* title);
-String slotKey(const char* prefix, int slot);
+bool saveSlotToEEPROM(int slot, TagData &tag);
+bool loadSlotFromEEPROM(int slot, TagData &tag);
+String readSlotName(int slot);
 void writeSelectedPreset();
 void verifyCurrentTag();
 bool waitForTag(uint8_t* uid, uint8_t* uidLength, unsigned long timeoutMs);
@@ -217,8 +239,7 @@ void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, BUILTIN_LED_ON);
   buzzerOff();
 
   currentTag.valid = false;
@@ -265,8 +286,8 @@ void setup() {
   Serial.print("PN532 firmware: 0x");
   Serial.println(versiondata, HEX);
 
-  prefs.begin("ace-rfid", false);
-  Serial.println("Preferences opened");
+  EEPROM.begin(EEPROM_SIZE);
+  Serial.println("EEPROM opened");
 
   beepSuccess();
 
@@ -684,17 +705,11 @@ void saveCurrentTag() {
   int slot = selectSaveSlot("Save Slot");
   selectedSaveSlot = slot;
 
-  prefs.putBytes(slotKey("data", slot).c_str(), currentTag.pages, sizeof(currentTag.pages));
-  prefs.putString(slotKey("name", slot).c_str(), currentTag.name);
-  prefs.putString(slotKey("mat", slot).c_str(), currentTag.material);
-  prefs.putString(slotKey("color", slot).c_str(), currentTag.colorName);
-  prefs.putInt(slotKey("nmin", slot).c_str(), currentTag.nozzleMin);
-  prefs.putInt(slotKey("nmax", slot).c_str(), currentTag.nozzleMax);
-  prefs.putInt(slotKey("bmin", slot).c_str(), currentTag.bedMin);
-  prefs.putInt(slotKey("bmax", slot).c_str(), currentTag.bedMax);
-  prefs.putInt(slotKey("dia", slot).c_str(), currentTag.diameter);
-  prefs.putInt(slotKey("len", slot).c_str(), currentTag.lengthMeter);
-  prefs.putBool(slotKey("valid", slot).c_str(), true);
+  if (!saveSlotToEEPROM(slot, currentTag)) {
+    showError("Save failed");
+    return;
+  }
+
   Serial.print("Saved current tag: ");
   Serial.println(currentTag.name);
   Serial.print("Saved slot: ");
@@ -713,32 +728,13 @@ void loadSavedTag() {
   Serial.println("Load saved tag started");
   int slot = selectSaveSlot("Load Slot");
   selectedSaveSlot = slot;
-  bool valid = prefs.getBool(slotKey("valid", slot).c_str(), false);
 
-  if (!valid) {
+  if (!loadSlotFromEEPROM(slot, currentTag)) {
     Serial.println("Load failed: no saved tag");
     showError("Empty slot");
     return;
   }
 
-  prefs.getBytes(slotKey("data", slot).c_str(), currentTag.pages, sizeof(currentTag.pages));
-  String savedName = prefs.getString(slotKey("name", slot).c_str(), "Saved Tag");
-  String savedMaterial = prefs.getString(slotKey("mat", slot).c_str(), "Unknown");
-  String savedColor = prefs.getString(slotKey("color", slot).c_str(), "Unknown");
-  currentTag.nozzleMin = prefs.getInt(slotKey("nmin", slot).c_str(), 0);
-  currentTag.nozzleMax = prefs.getInt(slotKey("nmax", slot).c_str(), 0);
-  currentTag.bedMin = prefs.getInt(slotKey("bmin", slot).c_str(), 0);
-  currentTag.bedMax = prefs.getInt(slotKey("bmax", slot).c_str(), 0);
-  currentTag.diameter = prefs.getInt(slotKey("dia", slot).c_str(), 0);
-  currentTag.lengthMeter = prefs.getInt(slotKey("len", slot).c_str(), 0);
-
-  strncpy(currentTag.name, savedName.c_str(), 16);
-  currentTag.name[16] = '\0';
-  strncpy(currentTag.material, savedMaterial.c_str(), 16);
-  currentTag.material[16] = '\0';
-  strncpy(currentTag.colorName, savedColor.c_str(), 16);
-  currentTag.colorName[16] = '\0';
-  currentTag.valid = true;
   if (strcmp(currentTag.material, "Unknown") == 0 || strcmp(currentTag.colorName, "Unknown") == 0) {
     decodeTagName(currentTag);
   }
@@ -765,7 +761,7 @@ int selectSaveSlot(const char* title) {
 
   while (selecting) {
     if (selectedSaveSlot != lastSlot) {
-      String savedName = prefs.getString(slotKey("name", selectedSaveSlot).c_str(), "Empty");
+      String savedName = readSlotName(selectedSaveSlot);
 
       lcd.clear();
       lcd.setCursor(0, 0);
@@ -812,10 +808,68 @@ int selectSaveSlot(const char* title) {
   return selectedSaveSlot;
 }
 
-String slotKey(const char* prefix, int slot) {
-  String key = prefix;
-  key += slot;
-  return key;
+bool saveSlotToEEPROM(int slot, TagData &tag) {
+  if (slot < 0 || slot >= saveSlotCount) return false;
+
+  SavedTagSlot saved;
+  memset(&saved, 0, sizeof(saved));
+
+  saved.valid = 0xA5;
+  memcpy(saved.pages, tag.pages, sizeof(saved.pages));
+  strncpy(saved.name, tag.name, 16);
+  strncpy(saved.material, tag.material, 16);
+  strncpy(saved.colorName, tag.colorName, 16);
+  saved.nozzleMin = tag.nozzleMin;
+  saved.nozzleMax = tag.nozzleMax;
+  saved.bedMin = tag.bedMin;
+  saved.bedMax = tag.bedMax;
+  saved.diameter = tag.diameter;
+  saved.lengthMeter = tag.lengthMeter;
+
+  int address = slot * saveSlotSize;
+  EEPROM.put(address, saved);
+  return EEPROM.commit();
+}
+
+bool loadSlotFromEEPROM(int slot, TagData &tag) {
+  if (slot < 0 || slot >= saveSlotCount) return false;
+
+  SavedTagSlot saved;
+  int address = slot * saveSlotSize;
+  EEPROM.get(address, saved);
+
+  if (saved.valid != 0xA5) return false;
+
+  memcpy(tag.pages, saved.pages, sizeof(tag.pages));
+  strncpy(tag.name, saved.name, 16);
+  tag.name[16] = '\0';
+  strncpy(tag.material, saved.material, 16);
+  tag.material[16] = '\0';
+  strncpy(tag.colorName, saved.colorName, 16);
+  tag.colorName[16] = '\0';
+  tag.nozzleMin = saved.nozzleMin;
+  tag.nozzleMax = saved.nozzleMax;
+  tag.bedMin = saved.bedMin;
+  tag.bedMax = saved.bedMax;
+  tag.diameter = saved.diameter;
+  tag.lengthMeter = saved.lengthMeter;
+  tag.valid = true;
+
+  return true;
+}
+
+String readSlotName(int slot) {
+  if (slot < 0 || slot >= saveSlotCount) return "Empty";
+
+  SavedTagSlot saved;
+  int address = slot * saveSlotSize;
+  EEPROM.get(address, saved);
+
+  if (saved.valid != 0xA5) return "Empty";
+  saved.name[16] = '\0';
+  if (strlen(saved.name) == 0) return "Saved Tag";
+
+  return String(saved.name);
 }
 
 // ===================== WRITE PRESET =====================
@@ -1181,7 +1235,7 @@ void showAbout() {
   lcd.setCursor(0, 0);
   lcd.print("ACE RFID Box");
   lcd.setCursor(0, 1);
-  lcd.print("WEMOS ESP32");
+  lcd.print("WEMOS ESP8266");
   delay(2200);
   showMenu();
 }
@@ -1193,10 +1247,9 @@ void playTone(int frequency, int durationMs) {
     delay(durationMs);
     digitalWrite(BUZZER_PIN, LOW);
   } else {
-    ledcAttach(BUZZER_PIN, frequency, 10);
-    ledcWriteTone(BUZZER_PIN, frequency);
+    tone(BUZZER_PIN, frequency, durationMs);
     delay(durationMs);
-    ledcWriteTone(BUZZER_PIN, 0);
+    noTone(BUZZER_PIN);
   }
 }
 
@@ -1204,7 +1257,7 @@ void buzzerOff() {
   if (BUZZER_IS_ACTIVE) {
     digitalWrite(BUZZER_PIN, LOW);
   } else {
-    ledcWriteTone(BUZZER_PIN, 0);
+    noTone(BUZZER_PIN);
   }
 }
 
@@ -1220,23 +1273,19 @@ void beepClick() {
 
 void beepSuccess() {
   Serial.println("Success feedback");
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, BUILTIN_LED_OFF);
   delay(80);
 
-  digitalWrite(LED_PIN, HIGH);
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, BUILTIN_LED_ON);
   playTone(1800, 130);
 
-  digitalWrite(LED_PIN, LOW);
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, BUILTIN_LED_OFF);
   delay(80);
 
-  digitalWrite(LED_PIN, HIGH);
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, BUILTIN_LED_ON);
   playTone(2400, 160);
 
-  digitalWrite(LED_PIN, LOW);
-  digitalWrite(LED_BUILTIN, HIGH);
+  digitalWrite(LED_BUILTIN, BUILTIN_LED_ON);
 }
 
 void beepFail() {
