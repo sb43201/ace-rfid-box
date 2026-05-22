@@ -1,5 +1,6 @@
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SH110X.h>
 #include <Adafruit_PN532.h>
 #include <Preferences.h>
 
@@ -21,14 +22,75 @@
 #define LED_PIN       27
 #define BUZZER_IS_ACTIVE true
 
+#define OLED_ADDR      0x3C
+#define OLED_WIDTH     128
+#define OLED_HEIGHT    64
+#define OLED_RESET     -1
+
 #ifndef LED_BUILTIN
 #define LED_BUILTIN   2
 #endif
 
 // ===================== OBJECTS =====================
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+Adafruit_SH1106G display(OLED_WIDTH, OLED_HEIGHT, &Wire, OLED_RESET);
 Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET, &Wire);
 Preferences prefs;
+
+class OledLcdCompat {
+public:
+  void begin() {
+    display.begin(OLED_ADDR, true);
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    display.setCursor(0, 0);
+    display.display();
+  }
+
+  void init() {
+    begin();
+  }
+
+  void backlight() {
+  }
+
+  void clear() {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.display();
+  }
+
+  void setCursor(int col, int row) {
+    display.setCursor(col * 6, row * 12);
+  }
+
+  void print(const char* text) {
+    display.print(text);
+    display.display();
+  }
+
+  void print(char c) {
+    display.print(c);
+    display.display();
+  }
+
+  void print(const String &text) {
+    display.print(text);
+    display.display();
+  }
+
+  void print(int value) {
+    display.print(value);
+    display.display();
+  }
+
+  void println(const char* text) {
+    display.println(text);
+    display.display();
+  }
+};
+
+OledLcdCompat lcd;
 
 // ===================== TAG DATA =====================
 struct TagData {
@@ -274,7 +336,7 @@ void setup() {
   lcd.setCursor(0, 0);
   lcd.print("PN532 Ready");
   lcd.setCursor(0, 1);
-  lcd.print("RFID Manager");
+  lcd.print("SH1106 OLED");
   delay(1500);
 
   showMenu();
@@ -1181,7 +1243,7 @@ void showAbout() {
   lcd.setCursor(0, 0);
   lcd.print("ACE RFID Box");
   lcd.setCursor(0, 1);
-  lcd.print("WEMOS ESP32");
+  lcd.print("ESP32 SH1106");
   delay(2200);
   showMenu();
 }
