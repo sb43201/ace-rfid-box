@@ -27,6 +27,9 @@
 #define OLED_HEIGHT    64
 #define OLED_RESET     -1
 
+const unsigned long infoDisplayMs = 8000;
+const unsigned long shortStatusMs = 2500;
+
 #ifndef LED_BUILTIN
 #define LED_BUILTIN   2
 #endif
@@ -228,6 +231,7 @@ void lcdPrintTrimmed(const char* text);
 void lcdPrintTrimmedWidth(const char* text, int width);
 void lcdPrintTagName(const char* label, const char* name);
 void lcdPrintFilamentInfo(const char* action, TagData &tag);
+void oledShowTwoLineMenu(const char* title, const char* value);
 void showMenu();
 void runMenuAction();
 void selectQuickPreset();
@@ -457,14 +461,36 @@ void lcdPrintFilamentInfo(const char* action, TagData &tag) {
   display.display();
 }
 
+void oledShowTwoLineMenu(const char* title, const char* value) {
+  display.clearDisplay();
+  display.setTextColor(SH110X_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.print(title);
+  display.setTextSize(2);
+
+  String menuValue(value);
+  if (menuValue.length() <= 9) {
+    display.setCursor(0, 22);
+    display.print(">");
+    display.print(menuValue);
+  } else {
+    int splitAt = menuValue.lastIndexOf(' ', 9);
+    if (splitAt < 1) splitAt = 9;
+
+    display.setCursor(0, 18);
+    display.print(">");
+    display.print(menuValue.substring(0, splitAt));
+    display.setCursor(12, 40);
+    display.print(menuValue.substring(splitAt + (menuValue[splitAt] == ' ' ? 1 : 0)));
+  }
+
+  display.display();
+}
+
 // ===================== MENU DISPLAY =====================
 void showMenu() {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Menu:");
-  lcd.setCursor(0, 1);
-  lcd.print(">");
-  lcdPrintTrimmed(menuItems[menuIndex]);
+  oledShowTwoLineMenu("Menu", menuItems[menuIndex]);
 }
 
 void runMenuAction() {
@@ -494,13 +520,9 @@ void selectQuickPreset() {
 
   while (selecting) {
     if (selectedPreset != lastPreset) {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print(materialFilters[selectedMaterial]);
-      lcd.print(" Color:");
-      lcd.setCursor(0, 1);
-      lcd.print(">");
-      lcdPrintTrimmed(presets[selectedPreset].colorName);
+      char title[22];
+      snprintf(title, sizeof(title), "%s Color", materialFilters[selectedMaterial]);
+      oledShowTwoLineMenu(title, presets[selectedPreset].colorName);
       lastPreset = selectedPreset;
     }
 
@@ -544,12 +566,7 @@ void selectMaterialFilter() {
 
   while (selecting) {
     if (selectedMaterial != lastMaterial) {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Material:");
-      lcd.setCursor(0, 1);
-      lcd.print(">");
-      lcd.print(materialFilters[selectedMaterial]);
+      oledShowTwoLineMenu("Material", materialFilters[selectedMaterial]);
       lastMaterial = selectedMaterial;
     }
 
@@ -624,7 +641,7 @@ void makePresetCurrent(FilamentPreset p) {
   currentTag.lengthMeter = p.lengthMeter;
 
   lcdPrintFilamentInfo("Current", currentTag);
-  delay(1500);
+  delay(infoDisplayMs);
 }
 
 // ===================== READ TAG =====================
@@ -689,7 +706,7 @@ void readTagToCurrent() {
   beepSuccess();
   lcdPrintFilamentInfo("Read OK", currentTag);
 
-  delay(2000);
+  delay(infoDisplayMs);
   showMenu();
 }
 
@@ -752,7 +769,7 @@ void cloneCurrentToTag() {
     return;
   }
 
-  delay(2200);
+  delay(infoDisplayMs);
   showMenu();
 }
 
@@ -789,7 +806,7 @@ void saveCurrentTag() {
   snprintf(label, sizeof(label), "Saved Slot %02d", slot + 1);
   lcdPrintTagName(label, currentTag.name);
 
-  delay(1800);
+  delay(shortStatusMs);
   showMenu();
 }
 
@@ -837,7 +854,7 @@ void loadSavedTag() {
   beepSuccess();
   lcdPrintFilamentInfo("Loaded", currentTag);
 
-  delay(1800);
+  delay(infoDisplayMs);
   showMenu();
 }
 
@@ -849,15 +866,9 @@ int selectSaveSlot(const char* title) {
     if (selectedSaveSlot != lastSlot) {
       String savedName = prefs.getString(slotKey("name", selectedSaveSlot).c_str(), "Empty");
 
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcdPrintTrimmed(title);
-      lcd.print(" ");
-      if (selectedSaveSlot + 1 < 10) lcd.print("0");
-      lcd.print(selectedSaveSlot + 1);
-      lcd.setCursor(0, 1);
-      lcd.print(">");
-      lcdPrintTrimmed(savedName.c_str());
+      char slotTitle[22];
+      snprintf(slotTitle, sizeof(slotTitle), "%s %02d", title, selectedSaveSlot + 1);
+      oledShowTwoLineMenu(slotTitle, savedName.c_str());
 
       Serial.print(title);
       Serial.print(": ");
@@ -963,7 +974,7 @@ void verifyCurrentTag() {
   Serial.println(currentTag.name);
   lcdPrintFilamentInfo("Verify OK", currentTag);
 
-  delay(2200);
+  delay(infoDisplayMs);
   showMenu();
 }
 
