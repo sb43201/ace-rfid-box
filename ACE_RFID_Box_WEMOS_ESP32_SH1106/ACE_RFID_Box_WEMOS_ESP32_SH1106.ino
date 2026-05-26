@@ -232,6 +232,8 @@ void lcdPrintTrimmedWidth(const char* text, int width);
 void lcdPrintTagName(const char* label, const char* name);
 void lcdPrintFilamentInfo(const char* action, TagData &tag);
 void oledShowTwoLineMenu(const char* title, const char* value);
+void oledShowCompactPicker(const char* title, const char* value);
+void holdInfoOrDismiss();
 void showMenu();
 void runMenuAction();
 void selectQuickPreset();
@@ -488,6 +490,37 @@ void oledShowTwoLineMenu(const char* title, const char* value) {
   display.display();
 }
 
+void oledShowCompactPicker(const char* title, const char* value) {
+  display.clearDisplay();
+  display.setTextColor(SH110X_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 8);
+  display.print(title);
+  display.setCursor(0, 28);
+  display.print(">");
+  display.print(value);
+  display.display();
+}
+
+void holdInfoOrDismiss() {
+  unsigned long startedAt = millis();
+
+  while (millis() - startedAt < infoDisplayMs) {
+    if (digitalRead(ENC_SW) == LOW ||
+        digitalRead(READ_BUTTON) == LOW ||
+        digitalRead(WRITE_BUTTON) == LOW) {
+      Serial.println("Information display dismissed");
+      while (digitalRead(ENC_SW) == LOW ||
+             digitalRead(READ_BUTTON) == LOW ||
+             digitalRead(WRITE_BUTTON) == LOW) {
+        delay(10);
+      }
+      return;
+    }
+    delay(10);
+  }
+}
+
 // ===================== MENU DISPLAY =====================
 void showMenu() {
   oledShowTwoLineMenu("Menu", menuItems[menuIndex]);
@@ -522,7 +555,7 @@ void selectQuickPreset() {
     if (selectedPreset != lastPreset) {
       char title[22];
       snprintf(title, sizeof(title), "%s Color", materialFilters[selectedMaterial]);
-      oledShowTwoLineMenu(title, presets[selectedPreset].colorName);
+      oledShowCompactPicker(title, presets[selectedPreset].colorName);
       lastPreset = selectedPreset;
     }
 
@@ -566,7 +599,7 @@ void selectMaterialFilter() {
 
   while (selecting) {
     if (selectedMaterial != lastMaterial) {
-      oledShowTwoLineMenu("Material", materialFilters[selectedMaterial]);
+      oledShowCompactPicker("Material", materialFilters[selectedMaterial]);
       lastMaterial = selectedMaterial;
     }
 
@@ -641,7 +674,7 @@ void makePresetCurrent(FilamentPreset p) {
   currentTag.lengthMeter = p.lengthMeter;
 
   lcdPrintFilamentInfo("Current", currentTag);
-  delay(infoDisplayMs);
+  holdInfoOrDismiss();
 }
 
 // ===================== READ TAG =====================
@@ -706,7 +739,7 @@ void readTagToCurrent() {
   beepSuccess();
   lcdPrintFilamentInfo("Read OK", currentTag);
 
-  delay(infoDisplayMs);
+  holdInfoOrDismiss();
   showMenu();
 }
 
@@ -769,7 +802,7 @@ void cloneCurrentToTag() {
     return;
   }
 
-  delay(infoDisplayMs);
+  holdInfoOrDismiss();
   showMenu();
 }
 
@@ -854,7 +887,7 @@ void loadSavedTag() {
   beepSuccess();
   lcdPrintFilamentInfo("Loaded", currentTag);
 
-  delay(infoDisplayMs);
+  holdInfoOrDismiss();
   showMenu();
 }
 
@@ -868,7 +901,7 @@ int selectSaveSlot(const char* title) {
 
       char slotTitle[22];
       snprintf(slotTitle, sizeof(slotTitle), "%s %02d", title, selectedSaveSlot + 1);
-      oledShowTwoLineMenu(slotTitle, savedName.c_str());
+      oledShowCompactPicker(slotTitle, savedName.c_str());
 
       Serial.print(title);
       Serial.print(": ");
@@ -974,7 +1007,7 @@ void verifyCurrentTag() {
   Serial.println(currentTag.name);
   lcdPrintFilamentInfo("Verify OK", currentTag);
 
-  delay(infoDisplayMs);
+  holdInfoOrDismiss();
   showMenu();
 }
 
