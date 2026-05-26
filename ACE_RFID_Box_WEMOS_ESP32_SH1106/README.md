@@ -23,3 +23,5 @@ The OLED I2C address is set to `0x3C` in the sketch.
 ## Notes
 
 The sketch keeps the existing menu and RFID behavior from the ESP32 LCD version. A small compatibility wrapper maps the old `lcd.clear()`, `lcd.setCursor()`, and `lcd.print()` calls onto the SH1106 OLED.
+
+For wiring, controls, workflows, and troubleshooting, see [USER_MANUAL.md](USER_MANUAL.md).
