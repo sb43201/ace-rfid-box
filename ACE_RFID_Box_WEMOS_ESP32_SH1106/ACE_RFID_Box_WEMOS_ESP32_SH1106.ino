@@ -222,6 +222,8 @@ bool tagWaitCanceled = false;
 // ===================== ENCODER STATE =====================
 int lastCLK = HIGH;
 unsigned long lastMove = 0;
+// Raise this value if one physical detent still advances more than one item.
+const unsigned long encoderStepMs = 180;
 
 // ===================== BUTTON STATE =====================
 const unsigned long buttonDebounceMs = 90;
@@ -240,6 +242,7 @@ ButtonState writeButton = {WRITE_BUTTON, HIGH, HIGH, false, 0};
 
 // ===================== FUNCTION DECLARATIONS =====================
 void handleEncoder();
+int readEncoderStep();
 void handleButtons();
 bool buttonPressed(int pin);
 ButtonState* getButtonState(int pin);
@@ -373,26 +376,33 @@ void loop() {
 
 // ===================== ENCODER =====================
 void handleEncoder() {
+  int dir = readEncoderStep();
+  if (dir == 0) return;
+
+  menuIndex += dir;
+
+  if (menuIndex < 0) menuIndex = menuCount - 1;
+  if (menuIndex >= menuCount) menuIndex = 0;
+
+  Serial.print("Menu selected: ");
+  Serial.println(menuItems[menuIndex]);
+  beepTurn();
+  showMenu();
+}
+
+int readEncoderStep() {
   int currentCLK = digitalRead(ENC_CLK);
+  int dir = 0;
 
-  if (currentCLK != lastCLK && currentCLK == LOW) {
-    if (millis() - lastMove > 80) {
-      int dir = digitalRead(ENC_DT) != currentCLK ? 1 : -1;
-
-      menuIndex += dir;
-
-      if (menuIndex < 0) menuIndex = menuCount - 1;
-      if (menuIndex >= menuCount) menuIndex = 0;
-
-      lastMove = millis();
-      Serial.print("Menu selected: ");
-      Serial.println(menuItems[menuIndex]);
-      beepTurn();
-      showMenu();
-    }
+  if (currentCLK != lastCLK &&
+      currentCLK == LOW &&
+      millis() - lastMove >= encoderStepMs) {
+    dir = digitalRead(ENC_DT) != currentCLK ? 1 : -1;
+    lastMove = millis();
   }
 
   lastCLK = currentCLK;
+  return dir;
 }
 
 // ===================== BUTTONS =====================
@@ -608,19 +618,14 @@ void selectQuickPreset() {
       lastPreset = selectedPreset;
     }
 
-    int currentCLK = digitalRead(ENC_CLK);
+    int dir = readEncoderStep();
 
-    if (currentCLK != lastCLK && currentCLK == LOW) {
-      int dir = digitalRead(ENC_DT) != currentCLK ? 1 : -1;
+    if (dir != 0) {
       selectedPreset = nextPresetForMaterial(selectedPreset, selectedMaterial, dir);
       Serial.print("Preset selected: ");
       Serial.println(presets[selectedPreset].name);
-      lastCLK = currentCLK;
       beepTurn();
-      delay(80);
     }
-
-    lastCLK = currentCLK;
 
     if (buttonPressed(ENC_SW)) {
       Serial.print("Preset confirmed: ");
@@ -652,10 +657,9 @@ void selectMaterialFilter() {
       lastMaterial = selectedMaterial;
     }
 
-    int currentCLK = digitalRead(ENC_CLK);
+    int dir = readEncoderStep();
 
-    if (currentCLK != lastCLK && currentCLK == LOW) {
-      int dir = digitalRead(ENC_DT) != currentCLK ? 1 : -1;
+    if (dir != 0) {
 
       selectedMaterial += dir;
       if (selectedMaterial < 0) selectedMaterial = materialFilterCount - 1;
@@ -663,12 +667,8 @@ void selectMaterialFilter() {
       Serial.print("Material selected: ");
       Serial.println(materialFilters[selectedMaterial]);
 
-      lastCLK = currentCLK;
       beepTurn();
-      delay(100);
     }
-
-    lastCLK = currentCLK;
 
     if (buttonPressed(ENC_SW)) {
       Serial.print("Material confirmed: ");
@@ -961,21 +961,15 @@ int selectSaveSlot(const char* title) {
       lastSlot = selectedSaveSlot;
     }
 
-    int currentCLK = digitalRead(ENC_CLK);
+    int dir = readEncoderStep();
 
-    if (currentCLK != lastCLK && currentCLK == LOW) {
-      int dir = digitalRead(ENC_DT) != currentCLK ? 1 : -1;
-
+    if (dir != 0) {
       selectedSaveSlot += dir;
       if (selectedSaveSlot < 0) selectedSaveSlot = saveSlotCount - 1;
       if (selectedSaveSlot >= saveSlotCount) selectedSaveSlot = 0;
 
-      lastCLK = currentCLK;
       beepTurn();
-      delay(100);
     }
-
-    lastCLK = currentCLK;
 
     if (buttonPressed(ENC_SW)) {
       Serial.print("Slot confirmed: ");
