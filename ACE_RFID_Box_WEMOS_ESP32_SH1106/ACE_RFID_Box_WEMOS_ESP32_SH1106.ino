@@ -426,13 +426,35 @@ void lcdPrintTagName(const char* label, const char* name) {
 }
 
 void lcdPrintFilamentInfo(const char* action, TagData &tag) {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcdPrintTrimmedWidth(action, 8);
-  lcd.print(" ");
-  lcdPrintTrimmedWidth(tag.material, 7);
-  lcd.setCursor(0, 1);
-  lcdPrintTrimmed(tag.colorName);
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 0);
+  display.print(action);
+  display.print(": ");
+  display.print(tag.material);
+  display.setCursor(0, 12);
+  display.print("Color: ");
+  display.print(tag.colorName);
+  display.setCursor(0, 24);
+  display.print("Nozzle: ");
+  display.print(tag.nozzleMin);
+  display.print("-");
+  display.print(tag.nozzleMax);
+  display.print(" C");
+  display.setCursor(0, 36);
+  display.print("Bed: ");
+  display.print(tag.bedMin);
+  display.print("-");
+  display.print(tag.bedMax);
+  display.print(" C");
+  display.setCursor(0, 48);
+  display.print("Dia: ");
+  display.print(tag.diameter / 100.0);
+  display.print("mm  ");
+  display.print(tag.lengthMeter);
+  display.print("m");
+  display.display();
 }
 
 // ===================== MENU DISPLAY =====================
@@ -813,9 +835,7 @@ void loadSavedTag() {
   Serial.println(slot + 1);
 
   beepSuccess();
-  char label[17];
-  snprintf(label, sizeof(label), "Loaded Slot %02d", slot + 1);
-  lcdPrintTagName(label, currentTag.name);
+  lcdPrintFilamentInfo("Loaded", currentTag);
 
   delay(1800);
   showMenu();
@@ -941,7 +961,7 @@ void verifyCurrentTag() {
   beepSuccess();
   Serial.print("Verify successful: ");
   Serial.println(currentTag.name);
-  lcdPrintTagName("VERIFY PASS", currentTag.name);
+  lcdPrintFilamentInfo("Verify OK", currentTag);
 
   delay(2200);
   showMenu();
