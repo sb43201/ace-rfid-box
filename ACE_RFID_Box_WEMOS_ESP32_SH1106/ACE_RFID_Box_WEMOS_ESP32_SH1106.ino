@@ -59,6 +59,8 @@ public:
 
   void clear() {
     display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
     display.setCursor(0, 0);
     display.display();
   }
@@ -220,13 +222,28 @@ bool tagWaitCanceled = false;
 // ===================== ENCODER STATE =====================
 int lastCLK = HIGH;
 unsigned long lastMove = 0;
-unsigned long lastButton = 0;
-const unsigned long debounceMs = 180;
+
+// ===================== BUTTON STATE =====================
+const unsigned long buttonDebounceMs = 90;
+
+struct ButtonState {
+  int pin;
+  bool stableState;
+  bool lastReading;
+  bool clickReady;
+  unsigned long lastChange;
+};
+
+ButtonState encoderButton = {ENC_SW, HIGH, HIGH, false, 0};
+ButtonState readButton = {READ_BUTTON, HIGH, HIGH, false, 0};
+ButtonState writeButton = {WRITE_BUTTON, HIGH, HIGH, false, 0};
 
 // ===================== FUNCTION DECLARATIONS =====================
 void handleEncoder();
 void handleButtons();
 bool buttonPressed(int pin);
+ButtonState* getButtonState(int pin);
+void updateButton(ButtonState &button);
 void lcdPrintTrimmed(const char* text);
 void lcdPrintTrimmedWidth(const char* text, int width);
 void lcdPrintTagName(const char* label, const char* name);
@@ -401,13 +418,45 @@ void handleButtons() {
 }
 
 bool buttonPressed(int pin) {
-  if (digitalRead(pin) == LOW && millis() - lastButton > debounceMs) {
-    lastButton = millis();
+  ButtonState* button = getButtonState(pin);
+  if (button == NULL) return false;
+
+  updateButton(*button);
+
+  if (button->clickReady) {
+    button->clickReady = false;
     beepClick();
-    delay(40);
     return true;
   }
+
   return false;
+}
+
+ButtonState* getButtonState(int pin) {
+  if (pin == ENC_SW) return &encoderButton;
+  if (pin == READ_BUTTON) return &readButton;
+  if (pin == WRITE_BUTTON) return &writeButton;
+  return NULL;
+}
+
+void updateButton(ButtonState &button) {
+  bool reading = digitalRead(button.pin);
+  unsigned long now = millis();
+
+  if (reading != button.lastReading) {
+    button.lastReading = reading;
+    button.lastChange = now;
+  }
+
+  if ((now - button.lastChange) < buttonDebounceMs) return;
+  if (reading == button.stableState) return;
+
+  button.stableState = reading;
+
+  // Trigger only after a full press and release, avoiding repeated selections while held.
+  if (button.stableState == HIGH) {
+    button.clickReady = true;
+  }
 }
 
 // ===================== LCD HELPERS =====================
@@ -1036,6 +1085,13 @@ bool waitForTag(uint8_t* uid, uint8_t* uidLength, unsigned long timeoutMs) {
         lcd.setCursor(0, 1);
         lcd.print("Main menu");
         delay(900);
+        while (digitalRead(ENC_SW) == LOW) {
+          delay(10);
+        }
+        encoderButton.stableState = HIGH;
+        encoderButton.lastReading = HIGH;
+        encoderButton.clickReady = false;
+        encoderButton.lastChange = millis();
         showMenu();
         return false;
       }
