@@ -150,7 +150,7 @@ const int materialFilterCount = sizeof(materialFilters) / sizeof(materialFilters
 int menuIndex = 0;
 int selectedPreset = 0;
 int selectedMaterial = 0;
-const int saveSlotCount = 20;
+const int saveSlotCount = 50;
 int selectedSaveSlot = 0;
 bool tagWaitCanceled = false;
 
