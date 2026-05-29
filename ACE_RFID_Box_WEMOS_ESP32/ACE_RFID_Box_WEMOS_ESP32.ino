@@ -2,6 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_PN532.h>
 #include <EEPROM.h>
+#include <ESP8266WiFi.h>
 
 // ===================== WEMOS D1 MINI ESP8266 PIN SETTINGS =====================
 // Use the Arduino D-pin labels for ESP8266 Wemos/Lolin D1 mini boards.
@@ -214,6 +215,8 @@ void decodeTagColor(TagData &tag);
 void decodeTagSettings(TagData &tag);
 int readTwoByteInt(uint8_t lowByte, uint8_t highByte);
 void dumpCurrentToSerial();
+String uidToString(uint8_t* uid, uint8_t uidLength);
+void showUnsupportedMifareTag(uint8_t* uid, uint8_t uidLength);
 void hexToByte(const char* hexString, uint8_t* byteArray, int byteCount);
 void reverseArray(uint8_t* array, int len);
 void showAbout();
@@ -230,6 +233,11 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println("ACE RFID Box booting");
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
+  delay(1);
+  Serial.println("WiFi radio disabled for battery mode");
 
   pinMode(ENC_CLK, INPUT_PULLUP);
   pinMode(ENC_DT, INPUT_PULLUP);
@@ -592,6 +600,10 @@ void readTagToCurrent() {
     if (!nfc.ntag2xx_ReadPage(page, data)) {
       Serial.print("Read tag failed on page ");
       Serial.println(page);
+      if (page == 4) {
+        showUnsupportedMifareTag(uid, uidLength);
+        return;
+      }
       showError("Read failed");
       return;
     }
@@ -1207,6 +1219,50 @@ void dumpCurrentToSerial() {
   }
 
   Serial.println("============================");
+}
+
+String uidToString(uint8_t* uid, uint8_t uidLength) {
+  String text = "";
+
+  for (uint8_t i = 0; i < uidLength; i++) {
+    if (i > 0) text += ":";
+    if (uid[i] < 0x10) text += "0";
+    text += String(uid[i], HEX);
+  }
+
+  text.toUpperCase();
+  return text;
+}
+
+void showUnsupportedMifareTag(uint8_t* uid, uint8_t uidLength) {
+  String uidText = uidToString(uid, uidLength);
+
+  currentTag.valid = false;
+
+  Serial.println("MIFARE/Bambu-style tag detected");
+  Serial.print("UID length: ");
+  Serial.println(uidLength);
+  Serial.print("UID: ");
+  Serial.println(uidText);
+  Serial.println("This sketch can detect this tag, but cannot decode or write Bambu RFID data.");
+
+  beepFail();
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Bambu/MIFARE");
+  lcd.setCursor(0, 1);
+  lcd.print("Read-only tag");
+  delay(2200);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("UID in Serial");
+  lcd.setCursor(0, 1);
+  lcd.print("Not writable");
+  delay(2200);
+
+  showMenu();
 }
 
 // ===================== HEX HELPERS =====================
