@@ -13,6 +13,7 @@ The ACE RFID Box reads, stores, creates, writes, and verifies RFID filament tag 
 - Load previously saved records and write them later.
 - Verify that a written or cloned tag matches the current record.
 - Show material, color, nozzle temperature, bed temperature, diameter, and filament length on the OLED.
+- Detect Bambu/MIFARE-style tags and display their UID as read-only/unsupported.
 - Print operations and raw tag page data in Serial Monitor.
 
 ## Hardware
@@ -144,6 +145,8 @@ The OLED shows:
 
 Serial Monitor also prints this information and a raw data dump of tag pages `4` through `31`.
 
+If a Bambu/MIFARE-style tag is detected, the OLED displays `Bambu/MIFARE`, the tag UID, and `Read-only detect`. The current sketch does not decode or write Bambu RFID data.
+
 ### Clone Current
 
 Writes the current in-memory tag record to another compatible tag.
@@ -230,6 +233,21 @@ The sketch uses these tag fields:
 
 The displayed color name is matched against the built-in preset color table. A tag with an unrecognized color code may display `Unknown`.
 
+## Bambu / MIFARE Tag Detection
+
+Bambu Lab filament RFID tags are different from the NTAG-style tags this writer is built around. They behave like MIFARE-style tags and do not expose the same simple page layout.
+
+When the device detects a tag but the first NTAG page read fails, it treats the tag as likely unsupported and shows:
+
+```text
+Bambu/MIFARE
+Tag detected
+UID: ...
+Read-only detect
+```
+
+This is detection only. It does not decode Bambu filament data, authenticate MIFARE sectors, clone a Bambu tag, or write a replacement Bambu tag.
+
 ## Serial Monitor
 
 Open Arduino Serial Monitor at:
@@ -302,10 +320,13 @@ For example, try `130`.
 
 While the device is asking for a tag, hold the encoder button for about one second to cancel and return to the main menu.
 
+### Bambu Tag Shows As Read-Only
+
+This is expected. The sketch can identify that a Bambu/MIFARE-style tag is present and show its UID, but it cannot decode or write Bambu RFID data.
+
 ## Safety And Usage Notes
 
 - Do not disconnect modules while the ESP32 is powered.
 - Do not write to an original tag until you have first read and saved its contents.
 - Test generated or cloned tags before depending on them in a printer workflow.
 - Tag compatibility and exact filament metadata requirements may differ by printer or material system.
-

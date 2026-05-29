@@ -254,6 +254,8 @@ void lcdPrintFilamentInfo(const char* action, TagData &tag);
 void oledShowTwoLineMenu(const char* title, const char* value);
 void oledShowCompactPicker(const char* title, const char* value);
 void holdInfoOrDismiss();
+String uidToString(uint8_t* uid, uint8_t uidLength);
+void showUnsupportedMifareTag(uint8_t* uid, uint8_t uidLength);
 void showMenu();
 void runMenuAction();
 void selectQuickPreset();
@@ -580,6 +582,52 @@ void holdInfoOrDismiss() {
   }
 }
 
+String uidToString(uint8_t* uid, uint8_t uidLength) {
+  String text = "";
+
+  for (uint8_t i = 0; i < uidLength; i++) {
+    if (i > 0) text += ":";
+    if (uid[i] < 0x10) text += "0";
+    text += String(uid[i], HEX);
+  }
+
+  text.toUpperCase();
+  return text;
+}
+
+void showUnsupportedMifareTag(uint8_t* uid, uint8_t uidLength) {
+  String uidText = uidToString(uid, uidLength);
+
+  currentTag.valid = false;
+
+  Serial.println("MIFARE/Bambu-style tag detected");
+  Serial.print("UID length: ");
+  Serial.println(uidLength);
+  Serial.print("UID: ");
+  Serial.println(uidText);
+  Serial.println("This sketch can detect this tag, but cannot decode or write Bambu RFID data.");
+
+  beepFail();
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 0);
+  display.print("Bambu/MIFARE");
+  display.setCursor(0, 12);
+  display.print("Tag detected");
+  display.setCursor(0, 28);
+  display.print("UID:");
+  display.setCursor(0, 40);
+  display.print(uidText);
+  display.setCursor(0, 56);
+  display.print("Read-only detect");
+  display.display();
+
+  holdInfoOrDismiss();
+  showMenu();
+}
+
 // ===================== MENU DISPLAY =====================
 void showMenu() {
   oledShowTwoLineMenu("Menu", menuItems[menuIndex]);
@@ -754,6 +802,10 @@ void readTagToCurrent() {
     if (!nfc.ntag2xx_ReadPage(page, data)) {
       Serial.print("Read tag failed on page ");
       Serial.println(page);
+      if (page == 4) {
+        showUnsupportedMifareTag(uid, uidLength);
+        return;
+      }
       showError("Read failed");
       return;
     }
