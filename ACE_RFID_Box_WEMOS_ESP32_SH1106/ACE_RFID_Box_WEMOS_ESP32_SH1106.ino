@@ -32,6 +32,8 @@
 const unsigned long infoDisplayMs = 8000;
 const unsigned long shortStatusMs = 2500;
 const unsigned long oledDimAfterMs = 30000;
+const uint8_t oledNormalContrast = 0x8F;
+const uint8_t oledDimContrast = 0x10;
 
 #ifndef LED_BUILTIN
 #define LED_BUILTIN   2
@@ -264,6 +266,7 @@ void showUnsupportedMifareTag(uint8_t* uid, uint8_t uidLength);
 void markUserActivity();
 void wakeDisplay();
 void handlePowerSave();
+void setOledContrast(uint8_t contrast);
 void showMenu();
 void runMenuAction();
 void selectQuickPreset();
@@ -613,17 +616,22 @@ void markUserActivity() {
 
 void wakeDisplay() {
   if (oledDimmed) {
-    display.dim(false);
+    setOledContrast(oledNormalContrast);
     oledDimmed = false;
   }
 }
 
 void handlePowerSave() {
   if (!oledDimmed && millis() - lastUserActivity >= oledDimAfterMs) {
-    display.dim(true);
+    setOledContrast(oledDimContrast);
     oledDimmed = true;
     Serial.println("OLED dimmed for battery saving");
   }
+}
+
+void setOledContrast(uint8_t contrast) {
+  display.oled_command(SH110X_SETCONTRAST);
+  display.oled_command(contrast);
 }
 
 String uidToString(uint8_t* uid, uint8_t uidLength) {
