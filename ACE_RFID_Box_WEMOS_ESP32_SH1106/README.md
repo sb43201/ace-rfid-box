@@ -1,5 +1,7 @@
 # ACE RFID Box - ESP32 SH1106 OLED
 
+Author: Bin Sun
+
 This branch targets the WEMOS/Lolin ESP32 build using an I2C SH1106 OLED instead of the 16x2 I2C LCD.
 
 ## Required Arduino Libraries
