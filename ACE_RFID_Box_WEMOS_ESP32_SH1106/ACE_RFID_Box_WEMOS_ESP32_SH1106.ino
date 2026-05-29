@@ -3,6 +3,8 @@
 #include <Adafruit_SH110X.h>
 #include <Adafruit_PN532.h>
 #include <Preferences.h>
+#include <WiFi.h>
+#include <esp_bt.h>
 
 // ===================== WEMOS MINI ESP32 PIN SETTINGS =====================
 #define I2C_SDA       21
@@ -307,6 +309,10 @@ void setup() {
 
   setCpuFrequencyMhz(80);
   Serial.println("CPU set to 80 MHz for battery mode");
+  WiFi.mode(WIFI_OFF);
+  btStop();
+  esp_bt_controller_disable();
+  Serial.println("WiFi and Bluetooth disabled for battery mode");
 
   pinMode(ENC_CLK, INPUT_PULLUP);
   pinMode(ENC_DT, INPUT_PULLUP);

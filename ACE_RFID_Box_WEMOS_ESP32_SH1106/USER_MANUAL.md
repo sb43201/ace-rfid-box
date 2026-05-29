@@ -117,6 +117,7 @@ The main menu uses larger text. Submenus and detail screens use smaller text so 
 The SH1106 sketch includes basic battery-saving behavior:
 
 - The ESP32 CPU is reduced to `80 MHz` during startup.
+- Wi-Fi and Bluetooth are disabled during startup.
 - The OLED dims after `30` seconds without control activity.
 - Turning the encoder, pressing a button, or updating the screen wakes the OLED.
 
