@@ -29,6 +29,7 @@
 
 const unsigned long infoDisplayMs = 8000;
 const unsigned long shortStatusMs = 2500;
+const unsigned long oledDimAfterMs = 30000;
 
 #ifndef LED_BUILTIN
 #define LED_BUILTIN   2
@@ -218,6 +219,8 @@ int selectedMaterial = 0;
 const int saveSlotCount = 20;
 int selectedSaveSlot = 0;
 bool tagWaitCanceled = false;
+bool oledDimmed = false;
+unsigned long lastUserActivity = 0;
 
 // ===================== ENCODER STATE =====================
 int lastCLK = HIGH;
@@ -256,6 +259,9 @@ void oledShowCompactPicker(const char* title, const char* value);
 void holdInfoOrDismiss();
 String uidToString(uint8_t* uid, uint8_t uidLength);
 void showUnsupportedMifareTag(uint8_t* uid, uint8_t uidLength);
+void markUserActivity();
+void wakeDisplay();
+void handlePowerSave();
 void showMenu();
 void runMenuAction();
 void selectQuickPreset();
@@ -299,6 +305,9 @@ void setup() {
   Serial.println();
   Serial.println("ACE RFID Box booting");
 
+  setCpuFrequencyMhz(80);
+  Serial.println("CPU set to 80 MHz for battery mode");
+
   pinMode(ENC_CLK, INPUT_PULLUP);
   pinMode(ENC_DT, INPUT_PULLUP);
   pinMode(ENC_SW, INPUT_PULLUP);
@@ -327,6 +336,7 @@ void setup() {
 
   lcd.begin();
   lcd.backlight();
+  lastUserActivity = millis();
   Serial.println("LCD started");
 
   lcd.clear();
@@ -374,6 +384,7 @@ void setup() {
 void loop() {
   handleEncoder();
   handleButtons();
+  handlePowerSave();
 }
 
 // ===================== ENCODER =====================
@@ -388,6 +399,7 @@ void handleEncoder() {
 
   Serial.print("Menu selected: ");
   Serial.println(menuItems[menuIndex]);
+  markUserActivity();
   beepTurn();
   showMenu();
 }
@@ -401,6 +413,7 @@ int readEncoderStep() {
       millis() - lastMove >= encoderStepMs) {
     dir = digitalRead(ENC_DT) != currentCLK ? 1 : -1;
     lastMove = millis();
+    markUserActivity();
   }
 
   lastCLK = currentCLK;
@@ -437,6 +450,7 @@ bool buttonPressed(int pin) {
 
   if (button->clickReady) {
     button->clickReady = false;
+    markUserActivity();
     beepClick();
     return true;
   }
@@ -485,6 +499,7 @@ void lcdPrintTrimmedWidth(const char* text, int width) {
 }
 
 void lcdPrintTagName(const char* label, const char* name) {
+  wakeDisplay();
   lcd.clear();
   lcd.setCursor(0, 0);
   lcdPrintTrimmed(label);
@@ -493,6 +508,7 @@ void lcdPrintTagName(const char* label, const char* name) {
 }
 
 void lcdPrintFilamentInfo(const char* action, TagData &tag) {
+  wakeDisplay();
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SH110X_WHITE);
@@ -525,6 +541,7 @@ void lcdPrintFilamentInfo(const char* action, TagData &tag) {
 }
 
 void oledShowTwoLineMenu(const char* title, const char* value) {
+  wakeDisplay();
   display.clearDisplay();
   display.setTextColor(SH110X_WHITE);
   display.setTextSize(1);
@@ -552,6 +569,7 @@ void oledShowTwoLineMenu(const char* title, const char* value) {
 }
 
 void oledShowCompactPicker(const char* title, const char* value) {
+  wakeDisplay();
   display.clearDisplay();
   display.setTextColor(SH110X_WHITE);
   display.setTextSize(1);
@@ -579,6 +597,26 @@ void holdInfoOrDismiss() {
       return;
     }
     delay(10);
+  }
+}
+
+void markUserActivity() {
+  lastUserActivity = millis();
+  wakeDisplay();
+}
+
+void wakeDisplay() {
+  if (oledDimmed) {
+    display.dim(false);
+    oledDimmed = false;
+  }
+}
+
+void handlePowerSave() {
+  if (!oledDimmed && millis() - lastUserActivity >= oledDimAfterMs) {
+    display.dim(true);
+    oledDimmed = true;
+    Serial.println("OLED dimmed for battery saving");
   }
 }
 

@@ -14,6 +14,7 @@ The ACE RFID Box reads, stores, creates, writes, and verifies RFID filament tag 
 - Verify that a written or cloned tag matches the current record.
 - Show material, color, nozzle temperature, bed temperature, diameter, and filament length on the OLED.
 - Detect Bambu/MIFARE-style tags and display their UID as read-only/unsupported.
+- Dim the OLED after idle time and run the ESP32 at reduced CPU speed for battery use.
 - Print operations and raw tag page data in Serial Monitor.
 
 ## Hardware
@@ -94,6 +95,7 @@ At startup:
 - The OLED shows the startup status.
 - The PN532 is detected and initialized.
 - A success double beep and LED flash indicates the device is ready.
+- The ESP32 CPU is set to `80 MHz` to reduce power consumption.
 
 If the PN532 is not detected, the OLED shows `PN532 ERROR` / `Check wiring` and the device stops at startup.
 
@@ -109,6 +111,24 @@ If the PN532 is not detected, the OLED shows `PN532 ERROR` / `Check wiring` and 
 | Press any button on a filament information screen | Return to the main menu before the display timeout |
 
 The main menu uses larger text. Submenus and detail screens use smaller text so more information fits on the OLED.
+
+## Battery Saving
+
+The SH1106 sketch includes basic battery-saving behavior:
+
+- The ESP32 CPU is reduced to `80 MHz` during startup.
+- The OLED dims after `30` seconds without control activity.
+- Turning the encoder, pressing a button, or updating the screen wakes the OLED.
+
+You can adjust the OLED idle dim time near the top of the sketch:
+
+```cpp
+const unsigned long oledDimAfterMs = 30000;
+```
+
+For example, use `10000` for 10 seconds or `60000` for 1 minute.
+
+For bigger battery savings, use a physical power switch or regulator shutdown for the PN532 and OLED, because those modules still consume current even when the display is dimmed.
 
 ## Main Menu
 
