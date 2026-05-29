@@ -9,7 +9,7 @@ The ACE RFID Box reads, stores, creates, writes, and verifies RFID filament tag 
 - Read filament RFID tags and display their information.
 - Create tags from built-in PLA, PETG, TPU, and ABS presets.
 - Clone the currently loaded tag to another compatible tag.
-- Save up to 20 tag records in ESP32 flash memory.
+- Save up to 50 tag records in ESP32 flash memory.
 - Load previously saved records and write them later.
 - Verify that a written or cloned tag matches the current record.
 - Show material, color, nozzle temperature, bed temperature, diameter, and filament length on the OLED.
@@ -181,18 +181,18 @@ Each written page is read back and compared byte-for-byte. A success indication 
 
 ### Save Current
 
-Saves the current tag record in one of 20 flash-memory slots.
+Saves the current tag record in one of 50 flash-memory slots.
 
 1. Load or create a current tag.
 2. Select `Save Current`.
-3. Rotate to choose slot `01` through `20`.
+3. Rotate to choose slot `01` through `50`.
 4. Press the encoder to save.
 
 Saving to an occupied slot overwrites its previous contents.
 
 ### Load Saved
 
-Loads one of the 20 stored records as the current tag.
+Loads one of the 50 stored records as the current tag.
 
 1. Select `Load Saved`.
 2. Rotate to choose a slot.
